@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#f0f4f9"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <title>City Metro Rail — Arrivals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #f0f4f9;
+      --surface:  #ffffff;
+      --surface2: #f8fafc;
+      --border:   #dde3ec;
+      --text:     #0f172a;
+      --muted:    #94a3b8;
+      --muted2:   #64748b;
+      --a-line:   #2563eb;
+      --e-line:   #e6b800;
+      --f-line:   #c2410c;
+      --k-line:   #ec4899;
+      --arriving: #16a34a;
+      --due:      #d97706;
+      --far:      #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      overscroll-behavior: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 18px 12px;
+      flex-shrink: 0;
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .topbar-row1 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 30px; height: 30px;
+      background: var(--a-line);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .brand-name {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 15px; font-weight: 800;
+      letter-spacing: 0.02em; color: var(--text); line-height: 1;
+    }
+    .brand-sub {
+      font-size: 9px; color: var(--muted2);
+      letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px;
+    }
+
+    .refresh-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted2); font-family: 'DM Mono', monospace;
+      font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 6px 12px; border-radius: 20px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: all .2s;
+    }
+    .refresh-btn:hover { border-color: var(--a-line); color: var(--text); }
+    .refresh-btn svg { transition: transform .5s; }
+    .refresh-btn.spinning svg { transform: rotate(360deg); }
+
+    .selectors {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .selector-wrap { position: relative; }
+    .selector-wrap select {
+      width: 100%;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: 'DM Mono', monospace;
+      font-size: 12px; padding: 9px 32px 9px 12px;
+      border-radius: 8px; outline: none; appearance: none;
+      cursor: pointer; transition: border-color .2s;
+    }
+    .selector-wrap select:focus { border-color: var(--a-line); }
+    .selector-wrap select option { background: var(--surface); }
+    .selector-wrap::after {
+      content: '▾';
+      position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted2); pointer-events: none; font-size: 12px;
+    }
+
+    /* ── REFRESH BAR ── */
+    .refresh-bar {
+      height: 2px; background: var(--border);
+      flex-shrink: 0; position: relative; overflow: hidden;
+    }
+    .refresh-bar-fill {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      background: var(--a-line); opacity: 0.5;
+      width: 100%;
+    }
+
+    /* ── LAST UPDATED ── */
+    .last-updated {
+      text-align: center;
+      font-size: 10px; color: var(--muted);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 8px 0 4px;
+      flex-shrink: 0;
+    }
+    .last-updated span { color: var(--muted2); }
+
+    /* ── CONTENT ── */
+    .content {
+      flex: 1; overflow-y: auto; padding: 0 14px 32px;
+    }
+    .content::-webkit-scrollbar { display: none; }
+
+    /* ── DIRECTION SECTION ── */
+    .dir-section { margin-top: 16px; }
+
+    .dir-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px; padding: 0 2px;
+    }
+    .dir-arrow {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px; font-weight: 800; color: var(--muted);
+    }
+    .dir-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted2);
+    }
+    .dir-dest {
+      font-size: 10px; color: var(--muted);
+      letter-spacing: 0.04em; margin-left: auto; text-align: right;
+    }
+
+    /* ── ARRIVAL CARD ── */
+    .arrival-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 14px;
+      position: relative; overflow: hidden;
+      animation: slideIn .2s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .arrival-card::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--line-color, var(--a-line));
+      border-radius: 12px 0 0 12px;
+    }
+    .arrival-card.is-arriving {
+      border-color: rgba(22,163,74,.2);
+      background: rgba(22,163,74,.05);
+    }
+    .arrival-card.is-arriving::before { background: var(--arriving); }
+
+    .line-badge {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--line-color, var(--a-line));
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 15px; font-weight: 800;
+      color: white; flex-shrink: 0;
+    }
+
+    .arrival-info { flex: 1; min-width: 0; }
+    .arrival-train {
+      font-family: 'Syne', sans-serif;
+      font-size: 17px; font-weight: 700;
+      color: var(--text); line-height: 1; margin-bottom: 5px;
+    }
+    .coupled-tag {
+      font-size: 10px; color: #7c3aed;
+      font-family: 'DM Mono', monospace;
+      font-weight: 400; margin-left: 6px;
+      background: rgba(124,58,237,.08);
+      padding: 1px 6px; border-radius: 10px;
+      border: 1px solid rgba(124,58,237,.2);
+    }
+    .arrival-detail {
+      font-size: 10px; color: var(--muted2);
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+
+    .arrival-time { text-align: right; flex-shrink: 0; }
+    .time-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 24px; font-weight: 800; line-height: 1;
+    }
+    .time-value.now-text {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16px; font-weight: 700; letter-spacing: 0.08em;
+    }
+    .time-value.arriving { color: var(--arriving); }
+    .time-value.due      { color: var(--due); }
+    .time-value.far      { color: var(--far); }
+    .time-unit {
+      font-size: 10px; color: var(--muted2);
+      letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;
+    }
+
+    /* ── EMPTY / NO SERVICE ── */
+    .no-service {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; text-align: center;
+      color: var(--muted); font-size: 11px; letter-spacing: 0.05em;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+
+    .choose-prompt {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 60px 24px; text-align: center; color: var(--muted); gap: 12px;
+    }
+    .choose-prompt .big-icon { font-size: 52px; }
+    .choose-prompt h2 {
+      font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700;
+      color: var(--muted2);
+    }
+    .choose-prompt p { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+    /* Line color classes */
+    .lc-A { --line-color: var(--a-line); }
+    .lc-E { --line-color: var(--e-line); }
+    .lc-F { --line-color: var(--f-line); }
+    .lc-K { --line-color: var(--k-line); }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-row1">
+    <div class="brand">
+      <img src="data:image/png;base64,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" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;background:white;border-radius:8px;padding:3px;"/>
+      <div>
+        <div class="brand-name">City Metro</div>
+        <div class="brand-sub">Live Arrivals</div>
+      </div>
+    </div>
+    <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/>
+        <polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+
+  <div class="selectors">
+    <div class="selector-wrap">
+      <select id="sel-station" onchange="onSelectionChange()">
+        <option value="">Station…</option>
+        <optgroup label="A · E · K Lines">
+          <option value="USP">Union Station</option>
+        </optgroup>
+        <optgroup label="A · E Lines">
+          <option value="DLP">Downtown Lego City</option>
+          <option value="AMP">Airport Metro TC</option>
+        </optgroup>
+        <optgroup label="E Line">
+          <option value="EQP">Emergency HQ</option>
+          <option value="DHP">Desktop Hills</option>
+          <option value="TCP">Table Central</option>
+        </optgroup>
+        <optgroup label="A Line">
+          <option value="DSP">Death Star City</option>
+          <option value="SMP">Santa Mooica</option>
+        </optgroup>
+        <optgroup label="K Line">
+          <option value="ATP">Asian Town</option>
+        </optgroup>
+        <optgroup label="F Line">
+          <option value="FTP">FLX Terminal 2</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="selector-wrap">
+      <select id="sel-line" onchange="onSelectionChange()">
+        <option value="">All Lines</option>
+        <option value="A">A Line</option>
+        <option value="E">E Line</option>
+        <option value="F">F Line</option>
+        <option value="K">K Line</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="refresh-bar"><div class="refresh-bar-fill" id="refresh-bar-fill"></div></div>
+<div class="last-updated" id="last-updated">Loading…</div>
+
+<div class="content" id="content">
+  <div class="choose-prompt">
+    <div class="big-icon">🚉</div>
+    <h2>Select a Station</h2>
+    <p>Choose a station above to see live arrivals</p>
+  </div>
+</div>
+
+<footer style="
+  text-align: center;
+  padding: 20px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+">
+  <p style="font-size: 10px; color: var(--muted); letter-spacing: 0.05em; line-height: 1.7;">
+    Copyright © 2026 Republic State Railway and Transportation Authority. All rights reserved.<br>
+    An official site of the Republic States Government.
+  </p>
+</footer>
+
+<script>
+const API_BASE       = 'https://trains-api.felixfeger46.workers.dev';
+const SECS_PER_BLOCK = 25;
+const REFRESH_SECS   = 20;
+
+/* ── Network sequences (order of travel, index 0 = origin) ── */
+const SEQUENCES = {
+  A_WB: ['AW_USP1','AW001','AW002','AW003','AW_DLP2','AW004','AW005','AW006','AW007','AW008','AW009','AW_AMP2','AW010','AW011','AW012','AW013','AW014','AW_DSP2','AW015','AW016','AW017','AW_SMP2'],
+  A_EB: ['AE_SMP1','AE015','AE016','AE017','AE_DSP1','AE010','AE011','AE012','AE013','AE014','AE_AMP1','AE004','AE005','AE006','AE007','AE008','AE009','AE_DLP1','AE001','AE002','AE003','AE_USP2'],
+  E_WB: ['AW_USP2','AW001','AW002','AW003','AW_DLP2','EW001','EW002','EW003','EW_EQP1','EW004','EW005','EW006','AW_AMP2','EW007','EW008','EW009','EW010','EW011','EW_DHP2','EW012','EW013','EW014','EW_TCP2'],
+  E_EB: ['EE_TCP1','EE012','EE013','EE014','EE_DHP1','EE007','EE008','EE009','EE010','EE011','AE_AMP1','EW006','EW005','EW004','EW_EQP1','EW003','EW002','EW001','AE_DLP1','AE001','AE002','AE003','AE_USP1'],
+  K_WB: ['KW_USP3','KW001','KW002','KW003','KW_ATP1'],
+  K_EB: ['KW_ATP1','KW003','KW002','KW001','KW_USP3'],
+  F_WB: ['FW_AMP3','FW001','FW002','FW003','FW_FTP2'],
+  F_EB: ['FW_FTP2','FW003','FW002','FW001','FW_AMP3'],
+};
+
+/* Station block IDs per sequence */
+const STATION_IDS = {
+  USP: { A_WB:'AW_USP1', A_EB:'AE_USP2', E_WB:'AW_USP2', E_EB:'AE_USP1', K_WB:'KW_USP3', K_EB:'KW_USP3' },
+  DLP: { A_WB:'AW_DLP2', A_EB:'AE_DLP1', E_WB:'AW_DLP2', E_EB:'AE_DLP1' },
+  EQP: { E_WB:'EW_EQP1', E_EB:'EW_EQP1' },
+  AMP: { A_WB:'AW_AMP2', A_EB:'AE_AMP1', E_WB:'AW_AMP2', E_EB:'AE_AMP1', F_WB:'FW_AMP3', F_EB:'FW_AMP3' },
+  DSP: { A_WB:'AW_DSP2', A_EB:'AE_DSP1' },
+  SMP: { A_WB:'AW_SMP2', A_EB:'AE_SMP1' },
+  DHP: { E_WB:'EW_DHP2', E_EB:'EE_DHP1' },
+  TCP: { E_WB:'EW_TCP2', E_EB:'EE_TCP1' },
+  ATP: { K_WB:'KW_ATP1', K_EB:'KW_ATP1' },
+  FTP: { F_WB:'FW_FTP2', F_EB:'FW_AMP3' },
+};
+
+const TERMINUS = {
+  A_WB:'Santa Mooica',    A_EB:'Union Station',
+  E_WB:'Table Central',   E_EB:'Union Station',
+  K_WB:'Asian Town',      K_EB:'Union Station',
+  F_WB:'FLX Terminal 2',  F_EB:'Airport Metro TC',
+};
+
+const LINE_COLORS = { A:'var(--a-line)', E:'var(--e-line)', F:'var(--f-line)', K:'var(--k-line)' };
+
+let trains = [];
+let refreshTimer = null;
+let barTimer = null;
+
+/* ── Arrival calculation ── */
+function calcArrivals(stationCode, lineFilter) {
+  const stationMap = STATION_IDS[stationCode];
+  if (!stationMap) return { WB:[], EB:[] };
+
+  const results = { WB:[], EB:[] };
+
+  for (const [seqKey, sequence] of Object.entries(SEQUENCES)) {
+    const parts   = seqKey.split('_');
+    const lineKey = parts[0];
+    const dir     = parts[1];
+
+    if (lineFilter && lineFilter !== lineKey) continue;
+
+    const stationBlockId = stationMap[seqKey];
+    if (!stationBlockId) continue;
+
+    const stationIdx = sequence.indexOf(stationBlockId);
+    if (stationIdx === -1) continue;
+
+    for (const train of trains) {
+      if (train.route !== lineKey) continue;
+
+      const trainIdx = sequence.indexOf(train.location);
+      if (trainIdx === -1) continue;
+      if (trainIdx > stationIdx) continue; // past station, skip
+
+      const blocksAway = stationIdx - trainIdx;
+      const secsAway   = blocksAway * SECS_PER_BLOCK; // 0 if at station
+      const minsAway   = Math.ceil(secsAway / 60);
+
+      results[dir].push({ train, blocksAway, secsAway, minsAway, lineKey, seqKey, terminus: TERMINUS[seqKey] });
+    }
+  }
+
+  results.WB.sort((a,b) => a.secsAway - b.secsAway);
+  results.EB.sort((a,b) => a.secsAway - b.secsAway);
+  return results;
+}
+
+function timeDisplay(minsAway, secsAway) {
+  if (secsAway === 0)  return { text:'NOW',  unit:'at station', cls:'arriving' };
+  if (secsAway <= 35)  return { text:'NOW',  unit:'arriving',   cls:'arriving' };
+  if (minsAway <= 1)   return { text:'1',    unit:'min',        cls:'arriving' };
+  if (minsAway <= 3)   return { text:`${minsAway}`, unit:'min', cls:'due'      };
+  return                      { text:`${minsAway}`, unit:'min', cls:'far'      };
+}
+
+/* ── Render ── */
+function renderBoard() {
+  const stationCode = document.getElementById('sel-station').value;
+  const lineFilter  = document.getElementById('sel-line').value || null;
+  const content     = document.getElementById('content');
+
+  if (!stationCode) {
+    content.innerHTML = '';
+    content.innerHTML = `<div class="choose-prompt"><div class="big-icon">🚉</div><h2>Select a Station</h2><p>Choose a station above to see live arrivals</p></div>`;
+    return;
+  }
+
+  const arrivals   = calcArrivals(stationCode, lineFilter);
+  const stationMap = STATION_IDS[stationCode] || {};
+  const lines      = lineFilter ? [lineFilter] : ['A','E','F','K'];
+
+  content.innerHTML = '';
+
+  for (const dir of ['WB','EB']) {
+    const arrow  = dir === 'WB' ? '←' : '→';
+    const label  = dir === 'WB' ? 'Westbound' : 'Eastbound';
+    const served = lines.some(l => stationMap[`${l}_${dir}`]);
+    if (!served) continue;
+
+    const section = document.createElement('div');
+    section.className = 'dir-section';
+
+    const destText = arrivals[dir][0]?.terminus || '';
+    section.innerHTML = `
+      <div class="dir-header">
+        <div class="dir-arrow">${arrow}</div>
+        <div class="dir-label">${label}</div>
+        ${destText ? `<div class="dir-dest">toward ${destText}</div>` : ''}
+      </div>
+    `;
+
+    if (!arrivals[dir].length) {
+      section.innerHTML += `<div class="no-service">No trains approaching</div>`;
+    } else {
+      // Deduplicate coupled sets — only show one card per coupled pair
+      const seen = new Set();
+      for (const a of arrivals[dir]) {
+        const num = a.train.number;
+        const partner = a.train.coupled_with;
+        const pairKey = partner ? [num, partner].sort().join('+') : num;
+        if (seen.has(pairKey)) continue;
+        seen.add(pairKey);
+
+        const td = timeDisplay(a.minsAway, a.secsAway);
+        const trainLabel = partner ? `#${num} + #${partner}` : `#${num}`;
+        const isCoupled = !!partner;
+
+        section.innerHTML += `
+          <div class="arrival-card lc-${a.lineKey}${td.cls === 'arriving' ? ' is-arriving' : ''}">
+            <div class="line-badge" style="background:${LINE_COLORS[a.lineKey]}">${a.lineKey}</div>
+            <div class="arrival-info">
+              <div class="arrival-train">
+                Train ${trainLabel}
+                ${isCoupled ? `<span class="coupled-tag">2-car set</span>` : ''}
+              </div>
+              <div class="arrival-detail">to ${a.terminus}</div>
+            </div>
+            <div class="arrival-time">
+              <div class="time-value ${td.cls}${td.text === 'NOW' ? ' now-text' : ''}">${td.text}</div>
+              <div class="time-unit">${td.unit}</div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    content.appendChild(section);
+  }
+}
+
+/* ── Fetch ── */
+async function fetchTrains() {
+  try {
+    const res = await fetch(`${API_BASE}/trains`);
+    if (!res.ok) throw new Error();
+    trains = await res.json();
+    const t = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    document.getElementById('last-updated').innerHTML =
+      `Updated <span>${t}</span> · <span>${trains.length}</span> train${trains.length !== 1 ? 's' : ''} on network`;
+  } catch {
+    document.getElementById('last-updated').innerHTML =
+      `<span style="color:var(--k-line)">Server unreachable</span>`;
+  }
+  renderBoard();
+}
+
+/* ── Progress bar animation ── */
+function animateBar() {
+  const fill = document.getElementById('refresh-bar-fill');
+  fill.style.transition = 'none';
+  fill.style.width = '100%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      fill.style.transition = `width ${REFRESH_SECS}s linear`;
+      fill.style.width = '0%';
+    });
+  });
+}
+
+/* ── Auto refresh ── */
+function startAutoRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => { fetchTrains(); animateBar(); }, REFRESH_SECS * 1000);
+  animateBar();
+}
+
+function manualRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  setTimeout(() => btn.classList.remove('spinning'), 500);
+  fetchTrains();
+  startAutoRefresh();
+}
+
+function onSelectionChange() { renderBoard(); }
+
+/* ── Init ── */
+fetchTrains();
+startAutoRefresh();
+</script>
+</body>
+</html>
