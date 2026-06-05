@@ -186,6 +186,9 @@
       margin: 12px 20px 0;
       box-shadow: var(--shadow-sm);
     }
+
+    /* ── TRAIN CARD ── each arrival gets its own bordered card inside the dir-block ── */
+    .arrival-cards { display: flex; flex-direction: column; gap: 0; }
     .dir-header {
       display: flex; align-items: center; gap: 10px;
       padding: 10px 16px;
@@ -205,38 +208,52 @@
       font-size: 10px; color: var(--muted2); letter-spacing: 0.04em;
     }
 
-    /* ── ARRIVAL ROW ── */
+    /* ── ARRIVAL ROW ── each train is its own card ── */
     .arrival-row {
       display: flex; align-items: center;
-      padding: 0 16px;
-      border-bottom: 1px solid var(--border);
-      min-height: 66px;
+      padding: 12px 14px;
+      margin: 0 12px 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
       background: var(--surface);
-      transition: background .1s;
+      transition: box-shadow .15s, border-color .15s;
       position: relative;
+      box-shadow: var(--shadow-sm);
     }
-    .arrival-row:last-child { border-bottom: none; }
+    .arrival-row:last-child { margin-bottom: 4px; }
     .arrival-row:active { background: var(--surface2); }
+    .arrival-row:hover { border-color: var(--border2); box-shadow: var(--shadow); }
 
     /* Left colored stripe */
     .arrival-row::before {
       content: ''; position: absolute;
-      left: 0; top: 0; bottom: 0; width: 3px;
+      left: 0; top: 6px; bottom: 6px; width: 3px;
       background: var(--row-color, #888);
       border-radius: 0 2px 2px 0;
     }
 
+    /* Train number circle — like the live dot */
     .arr-badge {
-      width: 34px; height: 34px; border-radius: 50%;
+      width: 42px; height: 42px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       font-family: var(--font-cond);
-      font-size: 16px; font-weight: 800; color: white;
-      flex-shrink: 0; margin-right: 14px; margin-left: 6px;
+      font-size: 17px; font-weight: 800; color: white;
+      flex-shrink: 0; margin-right: 14px; margin-left: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      position: relative;
+    }
+    /* Subtle ring around the badge */
+    .arr-badge::after {
+      content: '';
+      position: absolute; inset: -3px;
+      border-radius: 50%;
+      border: 2px solid var(--badge-color, #888);
+      opacity: 0.3;
     }
 
     .arr-info { flex: 1; min-width: 0; }
     .arr-train {
-      font-size: 14px; font-weight: 600; color: var(--text);
+      font-size: 15px; font-weight: 700; color: var(--text);
       line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .arr-dest {
@@ -255,10 +272,10 @@
     .arr-time { text-align: right; flex-shrink: 0; margin-left: 12px; }
     .arr-mins {
       font-family: var(--font-cond);
-      font-size: 30px; font-weight: 800;
+      font-size: 32px; font-weight: 800;
       line-height: 1; letter-spacing: -0.01em;
     }
-    .arr-mins.now  { color: var(--arriving); font-size: 15px; font-weight: 700; font-family: var(--font); letter-spacing: 0; }
+    .arr-mins.now  { color: var(--arriving); font-size: 14px; font-weight: 700; font-family: var(--font); letter-spacing: 0; }
     .arr-mins.due  { color: var(--due); }
     .arr-mins.far  { color: var(--text2); }
     .arr-unit {
@@ -600,13 +617,14 @@ function renderBoard() {
         const coupled = a.train.coupled_with;
         const trainLabel = coupled ? `Train #${a.train.number}` : `Train #${a.train.number}`;
 
+        const trainNum = String(a.train.number);
         html += `
-          <div class="arrival-row" style="--row-color:${color}">
-            <div class="arr-badge" style="background:${color}">${a.lineKey}</div>
+          <div class="arrival-row" style="--row-color:${color};--badge-color:${color}">
+            <div class="arr-badge" style="background:${color}">${trainNum}</div>
             <div class="arr-info">
               <div class="arr-train">
-                ${trainLabel}
-                ${coupled ? `<span class="arr-coupled">+#${coupled} 2-car</span>` : ''}
+                Train ${trainNum}
+                ${coupled ? `<span class="arr-coupled">+${coupled} 2-car</span>` : ''}
               </div>
               <div class="arr-dest">to ${a.terminus}</div>
             </div>
@@ -620,6 +638,7 @@ function renderBoard() {
     html += `</div>`;
   }
 
+  html += '<div style="height:16px"></div>';
   content.innerHTML = html;
 }
 
@@ -644,16 +663,26 @@ function onSelectionChange() {
 }
 
 /* ── Alert banner ── */
-/* banner fn placeholder */
+function updateAlertBanner() {
+  const banner = document.getElementById('alert-banner');
+  const items  = [];
   for (const c of closures) {
-    items.push(`<span class="alert-pill closure">🚫 ${c.station_name || c.station_id}: ${c.reason || 'Closed'}</span>`);
+    const name = c.station_name || c.station_id;
+    items.push(`<div class="banner-item">🚫 <strong>${name}</strong> is closed — ${c.reason || 'Maintenance'}</div>`);
   }
   for (const tb of turnbacks) {
-    const dir = tb.direction === 'both' ? '' : ` (${tb.direction}B)`;
-    items.push(`<span class="alert-pill turnback">↩ ${tb.line} Line turns back at ${tb.station_name || tb.station_id}${dir}</span>`);
+    const name   = tb.station_name || tb.station_id;
+    const dir    = tb.direction === 'both' ? '' : ` ${tb.direction === 'WB' ? 'westbound' : 'eastbound'}`;
+    const reason = tb.reason || 'a service adjustment';
+    items.push(`<div class="banner-item">↩ <strong>${tb.line} Line${dir} trains</strong> are turning back at ${name} due to ${reason}</div>`);
   }
   if (items.length) {
-    banner.innerHTML = '<span style="font-weight:700;margin-right:8px">⚠ Service Alerts</span>' + items.join(' ');
+    banner.innerHTML = \`
+      <div class="banner-icon">⚠️</div>
+      <div class="banner-content">
+        <div class="banner-title">Service Alerts</div>
+        <div class="banner-items">\${items.join('')}</div>
+      </div>\`;
     banner.classList.add('active');
   } else {
     banner.classList.remove('active');
@@ -711,11 +740,6 @@ function manualRefresh() {
   fetchTrains(); fetchClosures(); startAutoRefresh();
 }
 
-/* ── Init ── */
-fetchTrains();
-fetchClosures();
-startAutoRefresh();
-setInterval(fetchClosures, 60000);
 </script>
 </body>
 </html>
