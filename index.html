@@ -677,12 +677,13 @@ function updateAlertBanner() {
     items.push(`<div class="banner-item">↩ <strong>${tb.line} Line${dir} trains</strong> are turning back at ${name} due to ${reason}</div>`);
   }
   if (items.length) {
-    banner.innerHTML = \`
-      <div class="banner-icon">⚠️</div>
-      <div class="banner-content">
-        <div class="banner-title">Service Alerts</div>
-        <div class="banner-items">\${items.join('')}</div>
-      </div>\`;
+    banner.innerHTML = [
+      '<div class="banner-icon">⚠️</div>',
+      '<div class="banner-content">',
+        '<div class="banner-title">Service Alerts</div>',
+        '<div class="banner-items">' + items.join('') + '</div>',
+      '</div>'
+    ].join('');
     banner.classList.add('active');
   } else {
     banner.classList.remove('active');
