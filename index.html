@@ -691,18 +691,34 @@ function updateAlertBanner() {
   }
 }
 
-/* ── Fetch ── */
+/* ── Fetch with timeout + retry (handles Worker cold starts) ── */
+async function fetchWithRetry(url, retries = 2) {
+  for (let i = 1; i <= retries; i++) {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      return res;
+    } catch {
+      clearTimeout(timer);
+      if (i === retries) throw new Error('unreachable');
+      await new Promise(r => setTimeout(r, 700));
+    }
+  }
+}
+
 async function fetchTrains() {
   try {
-    const res = await fetch(`${API_BASE}/trains`);
+    const res = await fetchWithRetry(`${API_BASE}/trains`);
     if (!res.ok) throw new Error();
     trains = await res.json();
     const t = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    document.getElementById('live-dot').className   = 'live-dot';
-    document.getElementById('status-text').textContent = `Updated ${t} · ${trains.length} train${trains.length!==1?'s':''} active`;
+    document.getElementById('live-dot').className        = 'live-dot';
+    document.getElementById('status-text').textContent  = `Updated ${t} · ${trains.length} train${trains.length!==1?'s':''} active`;
   } catch {
-    document.getElementById('live-dot').className   = 'live-dot offline';
-    document.getElementById('status-text').textContent = 'Server unreachable';
+    document.getElementById('live-dot').className        = 'live-dot offline';
+    document.getElementById('status-text').textContent  = 'Server unreachable — tap Refresh';
   }
   renderBoard();
 }
@@ -710,8 +726,8 @@ async function fetchTrains() {
 async function fetchClosures() {
   try {
     const [cr, tr] = await Promise.all([
-      fetch(`${API_BASE}/closures`),
-      fetch(`${API_BASE}/turnbacks`),
+      fetchWithRetry(`${API_BASE}/closures`),
+      fetchWithRetry(`${API_BASE}/turnbacks`),
     ]);
     closures  = cr.ok ? await cr.json()  : [];
     turnbacks = tr.ok ? await tr.json()  : [];
@@ -742,11 +758,13 @@ function manualRefresh() {
   fetchTrains(); fetchClosures(); startAutoRefresh();
 }
 
-/* ── Init ── */
-fetchTrains();
-fetchClosures();
-startAutoRefresh();
-setInterval(fetchClosures, 60000);
+/* ── Init — await first fetch so URL param renders with live data ── */
+(async function init() {
+  await Promise.all([fetchTrains(), fetchClosures()]);
+  startAutoRefresh();
+  setInterval(fetchClosures, 60000);
+  loadFromURL();
+})();
 
 /* ── URL param: ?station=USP  or  ?station=unionstation ──
    e.g. livearrivals.citymetro.xyz/?station=unionstation
