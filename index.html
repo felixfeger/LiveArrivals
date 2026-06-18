@@ -500,7 +500,8 @@ function calcArrivals(stationCode, lineFilter) {
       if (train.route !== lineKey) continue;
       const trainIdx = sequence.indexOf(train.location);
       if (trainIdx === -1) continue;
-      if (trainIdx >= stationIdx) continue;
+      // Only skip trains that have passed the station, not trains AT the station
+      if (trainIdx > stationIdx) continue;
 
       // Check turnback — skip if train turns back before this station
       const tbForLine = turnbacks.find(t => t.line === lineKey &&
@@ -740,6 +741,46 @@ function startAutoRefresh() {
 function manualRefresh() {
   fetchTrains(); fetchClosures(); startAutoRefresh();
 }
+
+/* ── Init ── */
+fetchTrains();
+fetchClosures();
+startAutoRefresh();
+setInterval(fetchClosures, 60000);
+
+/* ── URL param: ?station=USP  or  ?station=unionstation ──
+   e.g. livearrivals.citymetro.xyz/?station=unionstation
+        livearrivals.citymetro.xyz/?station=USP
+─────────────────────────────────────────────────── */
+(function loadFromURL() {
+  const params = new URLSearchParams(location.search);
+  const raw    = (params.get('station') || params.get('s') || '').toLowerCase().trim();
+  if (!raw) return;
+
+  const SLUG_MAP = {
+    'unionstation': 'USP', 'union': 'USP', 'usp': 'USP',
+    'downtown': 'DLP', 'downtownlegocity': 'DLP', 'dlp': 'DLP',
+    'emergencyhq': 'EQP', 'emergency': 'EQP', 'eqp': 'EQP',
+    'airport': 'AMP', 'airportmetrotc': 'AMP', 'amp': 'AMP',
+    'deathstar': 'DSP', 'deathstarcity': 'DSP', 'dsp': 'DSP',
+    'santamooica': 'SMP', 'santa': 'SMP', 'smp': 'SMP',
+    'desktophills': 'DHP', 'desktop': 'DHP', 'dhp': 'DHP',
+    'tablecentral': 'TCP', 'table': 'TCP', 'tcp': 'TCP',
+    'asiantown': 'ATP', 'asian': 'ATP', 'atp': 'ATP',
+    'flxterminal': 'FTP', 'flxt2': 'FTP', 'ftp': 'FTP',
+  };
+
+  const normalized = raw.replace(/[\s\-_]/g, '');
+  const code = SLUG_MAP[normalized] || raw.toUpperCase();
+
+  const sel = document.getElementById('sel-station');
+  if (!sel) return;
+  const opt = Array.from(sel.options).find(o => o.value === code);
+  if (opt) {
+    sel.value = code;
+    onSelectionChange();
+  }
+})();
 
 </script>
 </body>
